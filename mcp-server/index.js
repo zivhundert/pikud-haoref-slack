@@ -1,18 +1,29 @@
 /**
  * Pikud Ha'oref MCP Server + SSE Bridge
  *
- * 1. MCP tools via StreamableHTTP on port 8001 at /mcp
- *    → VS Code Copilot Chat connects here
+ * This file is part of the pikud-haoref-daemon project.
+ * The Pikud Ha'oref API integration is powered by Leon Melamud's MCP:
+ *   https://github.com/LeonMelamud/pikud-a-oref-mcp
  *
- * 2. SSE bridge on port 8000 at /api/webhook/alerts and /api/alerts-stream
- *    → Python daemon SSEListener connects here; polls oref.org.il every 3 s
- *      and forwards new_alert events to all connected clients
+ * What runs here:
  *
- * MCP Tools:
- *   get_active_alert   – query the live Pikud Ha'oref API
- *   get_recent_alerts  – read the last N alerts from the daemon's SQLite DB
- *   get_daemon_status  – read data/status.json written by the daemon
- *   get_sample_alert   – return a realistic example alert object
+ * 1. SSE bridge — port 8000 — /api/webhook/alerts  /api/alerts-stream
+ *    Polls oref.org.il every 3 s via pikud-haoref-api (Leon's package) and
+ *    re-emits `event: new_alert` frames to any connected SSE client.
+ *    The Python daemon subscribes here.
+ *
+ * 2. MCP HTTP server — port 8001 — /mcp
+ *    StreamableHTTP JSON-RPC endpoint for VS Code Copilot Chat.
+ *
+ * MCP tools:
+ *   get_active_alert   – direct live query of the Pikud Ha'oref API
+ *   get_recent_alerts  – last N alerts from the daemon's SQLite DB
+ *   get_daemon_status  – data/status.json written by the Python daemon
+ *   get_sample_alert   – realistic example alert payload
+ *
+ * Credits:
+ *   Leon Melamud — https://github.com/LeonMelamud/pikud-a-oref-mcp
+ *   Pikud Ha'oref — https://www.oref.org.il
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";

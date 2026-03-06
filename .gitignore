@@ -15,8 +15,13 @@ build/
 venv/
 env/
 
-# Environment
+# Environment — never commit secrets
 .env
+
+# Node
+node_modules/
+mcp-server/node_modules/
+npm-debug.log*
 
 # Data / runtime artefacts
 data/
@@ -26,6 +31,7 @@ data/
 
 # IDEs
 .idea/
+.vscode/settings.json
 *.swp
 *.swo
 
