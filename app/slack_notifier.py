@@ -89,13 +89,11 @@ def build_blocks(alert: Alert, endpoint: str, tz_name: str) -> list[dict]:  # no
     })
     blocks.append({"type": "divider"})
 
-    # ── Location + Region (two-column) ──────────────────────────────
-    region_text = f"*מחוז:*\n{alert.region}" if alert.region else "*מחוז:*\n—"
+    # ── Location ─────────────────────────────────────────────────────
     blocks.append({
         "type": "section",
         "fields": [
             {"type": "mrkdwn", "text": f"*מיקום:*\n{city_str}"},
-            {"type": "mrkdwn", "text": region_text},
         ],
     })
 

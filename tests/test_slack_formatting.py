@@ -44,13 +44,6 @@ def test_blocks_contain_cities() -> None:
     assert "יפו" in all_text
 
 
-def test_blocks_contain_region() -> None:
-    alert = _make_alert()
-    blocks = build_blocks(alert, "http://localhost:8000/api/webhook/alerts", "Asia/Jerusalem")
-    all_text = json.dumps(blocks, ensure_ascii=False)
-    assert "מרכז" in all_text
-
-
 def test_blocks_contain_description() -> None:
     alert = _make_alert()
     blocks = build_blocks(alert, "http://localhost:8000/api/webhook/alerts", "Asia/Jerusalem")
