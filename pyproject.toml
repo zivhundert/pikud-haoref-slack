@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pikud-haoref-daemon"
+name = "oref-slack"
 version = "0.1.0"
-description = "Pikud Haoref real-time alert → Slack forwarding daemon"
+description = "Real-time Pikud Ha'oref alerts → Slack channel"
 requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.27",

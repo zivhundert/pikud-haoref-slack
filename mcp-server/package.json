@@ -1,5 +1,5 @@
 {
-  "name": "pikud-haoref-mcp-server",
+  "name": "oref-slack-mcp-server",
   "version": "0.1.0",
   "description": "MCP server for Pikud Ha'oref alerts – Copilot Chat development tool",
   "type": "module",

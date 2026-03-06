@@ -175,7 +175,7 @@ class SlackNotifier:
                 "type": "header",
                 "text": {
                     "type": "plain_text",
-                    "text": "🧪 הודעת בדיקה — Pikud Ha'oref Daemon",
+                    "text": "🧪 הודעת בדיקה — oref-slack",
                     "emoji": True,
                 },
             },
@@ -183,7 +183,7 @@ class SlackNotifier:
             {
                 "type": "section",
                 "fields": [
-                    {"type": "mrkdwn", "text": "*סטטוס:*\n✅ Daemon פעיל ומחובר"},
+                    {"type": "mrkdwn", "text": "*סטטוס:*\n✅ oref-slack פעיל ומחובר"},
                     {"type": "mrkdwn", "text": f"*זמן:*\n{time_str}"},
                 ],
             },
@@ -204,7 +204,7 @@ class SlackNotifier:
         ]
         try:
             response: WebhookResponse = self._client.send(
-                text="🧪 [TEST] Pikud Ha'oref Daemon — test message",
+                text="🧪 [TEST] oref-slack — test message",
                 blocks=blocks,
             )
             if response.status_code == 200:

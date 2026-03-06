@@ -5,7 +5,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends tzdata && \
     rm -rf /var/lib/apt/lists/*
 
-WORKDIR /daemon
+WORKDIR /app
 
 # Install Python dependencies first (layer cache)
 COPY pyproject.toml ./
@@ -18,9 +18,9 @@ COPY app/ ./app/
 RUN mkdir -p data
 
 # Run as non-root
-RUN addgroup --system daemon && adduser --system --ingroup daemon daemon && \
-    chown -R daemon:daemon /daemon
-USER daemon
+RUN addgroup --system app && adduser --system --ingroup app app && \
+    chown -R app:app /app
+USER app
 
 CMD ["python", "-m", "app.main", "run"]
 

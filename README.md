@@ -1,4 +1,4 @@
-# Pikud Ha'oref → Slack
+# oref-slack
 
 > A local server wrapper that fetches real-time Pikud Ha'oref (Israel Home Front Command) alerts and forwards them instantly to your Slack channel.
 
@@ -68,8 +68,8 @@ VS Code Copilot Chat ◄──► MCP HTTP server (port 8001)
 
 ```bash
 # 1. Clone
-git clone https://github.com/YOUR_USERNAME/pikud-haoref-daemon.git
-cd pikud-haoref-daemon
+git clone https://github.com/YOUR_USERNAME/oref-slack.git
+cd oref-slack
 
 # 2. Python environment
 python3.12 -m venv .venv
@@ -124,13 +124,13 @@ Open **http://localhost:8080** for the dashboard.
 
 ```bash
 # Build
-docker build -t pikud-haoref-daemon .
+docker build -t oref-slack .
 
 # Run
 docker run --rm \
   --env-file .env \
-  -v "$(pwd)/data:/daemon/data" \
-  pikud-haoref-daemon
+  -v "$(pwd)/data:/app/data" \
+  oref-slack
 ```
 
 The container healthcheck reads `data/status.json` and verifies `ready=true`
