@@ -157,13 +157,43 @@ _HTML = """\
   /* Alert list */
   #alert-list { display: flex; flex-direction: column; gap: 10px; }
   .alert-card { background: var(--card); border: 1px solid var(--border);
-                border-radius: 10px; padding: 14px 16px; animation: fadein .4s ease; }
+                border-radius: 10px; padding: 0; animation: fadein .4s ease;
+                overflow: hidden; }
   .alert-card.new { border-color: var(--accent); }
   @keyframes fadein { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
-  .alert-title { font-weight: 700; font-size: .95rem; margin-bottom: 6px; }
-  .alert-meta { display: flex; flex-wrap: wrap; gap: 6px 14px;
-                font-size: .78rem; color: var(--muted); }
-  .alert-meta span { display: flex; align-items: center; gap: 4px; }
+
+  /* Alert card header bar */
+  .alert-header { display: flex; align-items: center; justify-content: space-between;
+                  gap: 10px; padding: 12px 16px; flex-wrap: wrap;
+                  border-bottom: 1px solid var(--border); }
+  .alert-title { font-weight: 700; font-size: .95rem; }
+  .alert-header-right { display: flex; align-items: center; gap: 8px;
+                        font-size: .78rem; color: var(--muted); flex-shrink: 0; }
+
+  /* Alert body: structured fields */
+  .alert-body { padding: 10px 16px 0; }
+  .alert-field { display: flex; gap: 10px; padding: 5px 0;
+                 border-bottom: 1px solid var(--border); font-size: .82rem; }
+  .alert-field:last-child { border-bottom: none; }
+  .af-key { color: var(--muted); flex-shrink: 0; min-width: 110px; }
+  .af-val { color: var(--text); word-break: break-word; }
+  .af-val.mono { font-family: 'Cascadia Code','Fira Mono',monospace; font-size: .76rem;
+                 color: #94a3b8; }
+
+  /* Raw JSON toggle */
+  .raw-toggle { width: 100%; background: none; border: none; border-top: 1px solid var(--border);
+                color: var(--muted); font-size: .75rem; padding: 7px 16px;
+                text-align: right; cursor: pointer; display: flex; align-items: center;
+                gap: 5px; transition: color .2s; }
+  .raw-toggle:hover { color: var(--text); }
+  .raw-arrow { transition: transform .2s; display: inline-block; }
+  .raw-arrow.open { transform: rotate(90deg); }
+  .raw-pre { display: none; margin: 0; padding: 10px 16px 14px;
+             font-family: 'Cascadia Code','Fira Mono',monospace; font-size: .74rem;
+             color: #94a3b8; white-space: pre-wrap; word-break: break-all;
+             background: #080a10; border-top: 1px solid var(--border); }
+  .raw-pre.open { display: block; }
+
   .pill { background: rgba(99,102,241,.18); color: var(--accent);
           border-radius: 6px; padding: 2px 8px; font-size: .75rem; font-weight: 500; }
   .pill.ok    { background: rgba(34,197,94,.15);  color: var(--green); }
@@ -334,21 +364,65 @@ function slackPill(result) {
   return '';
 }
 
+function field(key, val, mono) {
+  if (!val && val !== 0) return '';
+  return `<div class="alert-field">
+    <span class="af-key">${esc(key)}</span>
+    <span class="af-val${mono ? ' mono' : ''}">${esc(String(val))}</span>
+  </div>`;
+}
+
 function renderAlertCard(a, isNew) {
-  const cities = (a.cities || []).join('، ');
-  const time   = a.received_at_iso ? fmtTime(a.received_at_iso) : '—';
+  const raw   = a.raw || {};
+  const time  = a.received_at_iso ? fmtTime(a.received_at_iso) : '—';
+
+  // Prefer the parsed `type` from raw payload for the title icon/label
+  const typeStr = raw.type || '';
+  const title   = a.title || typeStr || 'התראה';
+
+  // Cities: from parsed cities array, falling back to raw
+  const cities = (a.cities && a.cities.length)
+    ? a.cities.join(' · ')
+    : (Array.isArray(raw.cities) ? raw.cities.join(' · ') : '');
+
+  // Instructions from raw (pikud-haoref-api field)
+  const instructions = raw.instructions || a.description || '';
+
+  const alertId = raw.id || a.alert_id || '';
+  const endpoint = a.endpoint || '';
+
+  // Pretty-print raw JSON
+  const rawJson = JSON.stringify(raw, null, 2);
+  const uid = 'r' + Math.random().toString(36).slice(2);
+
   return `
     <div class="alert-card ${isNew ? 'new' : ''}">
-      <div class="alert-title">${esc(a.title || 'התראה')}</div>
-      <div class="alert-meta">
-        ${cities ? `<span>📍 ${esc(cities)}</span>` : ''}
-        ${a.region ? `<span>🗺 ${esc(a.region)}</span>` : ''}
-        ${a.description ? `<span>📝 ${esc(a.description)}</span>` : ''}
-        <span>🕐 ${esc(time)}</span>
-        <span><code class="mono">${esc(a.endpoint||'')}</code></span>
-        ${slackPill(a.slack_result)}
+      <div class="alert-header">
+        <div class="alert-title">${esc(title)}</div>
+        <div class="alert-header-right">
+          ${slackPill(a.slack_result)}
+          <span>🕐 ${esc(time)}</span>
+        </div>
       </div>
+      <div class="alert-body">
+        ${field('סוג (type)',    typeStr,       true)}
+        ${field('ערים',          cities,        false)}
+        ${field('הנחיות',        instructions,  false)}
+        ${field('מזהה (id)',     alertId,       true)}
+        ${endpoint ? field('נקודת קצה', endpoint, true) : ''}
+      </div>
+      <button class="raw-toggle" onclick="toggleRaw('${uid}')">
+        <span class="raw-arrow" id="arr-${uid}">▶</span> Raw JSON
+      </button>
+      <pre class="raw-pre" id="pre-${uid}">${esc(rawJson)}</pre>
     </div>`;
+}
+
+function toggleRaw(uid) {
+  const pre = document.getElementById('pre-' + uid);
+  const arr = document.getElementById('arr-' + uid);
+  pre.classList.toggle('open');
+  arr.classList.toggle('open');
 }
 
 function prependAlert(a) {

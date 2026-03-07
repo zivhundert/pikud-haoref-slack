@@ -107,16 +107,12 @@ async function readRecentAlerts(limit = 10) {
 }
 
 // ---------------------------------------------------------------------------
-// MCP Server
+// MCP Tool registration
 // ---------------------------------------------------------------------------
 
-const server = new McpServer({
-  name: "pikud-haoref",
-  version: "0.1.0",
-});
-
+function registerTools(s) {
 // ── Tool: get_active_alert ──────────────────────────────────────────────────
-server.tool(
+s.tool(
   "get_active_alert",
   "Query the live Pikud Ha'oref API for the currently active alert. " +
     "Note: the API is only accessible from within Israel or via an Israeli proxy.",
@@ -149,7 +145,7 @@ server.tool(
 );
 
 // ── Tool: get_recent_alerts ─────────────────────────────────────────────────
-server.tool(
+s.tool(
   "get_recent_alerts",
   "Read the last N alerts recorded by the running daemon from the local SQLite database.",
   {
@@ -172,7 +168,7 @@ server.tool(
 );
 
 // ── Tool: get_daemon_status ─────────────────────────────────────────────────
-server.tool(
+s.tool(
   "get_daemon_status",
   "Read the current operational status of the Pikud Ha'oref daemon " +
     "(connectivity, last alert, Slack result, reconnect count, etc.).",
@@ -191,7 +187,7 @@ server.tool(
 );
 
 // ── Tool: get_sample_alert ──────────────────────────────────────────────────
-server.tool(
+s.tool(
   "get_sample_alert",
   "Return a realistic example Pikud Ha'oref alert payload showing all fields " +
     "the daemon can receive. Useful for tests and understanding the data model.",
@@ -220,20 +216,19 @@ server.tool(
     };
   }
 );
+} // end registerTools
 
 // ---------------------------------------------------------------------------
 // Start — StreamableHTTP MCP server on :8001
 // ---------------------------------------------------------------------------
 
-// Stateless mode: no session bookkeeping needed for a local dev tool
-const transport = new StreamableHTTPServerTransport({
-  sessionIdGenerator: undefined,
-});
-
-await server.connect(transport);
+// Stateful mode: each client gets a session ID so VS Code Copilot can
+// correlate initialize ↔ tool-call requests correctly.
+// A new transport is created per session; sessions are stored in this map.
+const sessions = new Map(); // sessionId → transport
 
 const MCP_PORT = 8001;
-const mcpHttpServer = http.createServer((req, res) => {
+const mcpHttpServer = http.createServer(async (req, res) => {
   // CORS so VS Code can connect from any origin
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
@@ -248,7 +243,61 @@ const mcpHttpServer = http.createServer((req, res) => {
   }
 
   if (req.url === "/mcp" || req.url.startsWith("/mcp?")) {
-    transport.handleRequest(req, res);
+    // Read body first (SDK needs the parsed body on POST)
+    let rawBody = "";
+    await new Promise((resolve) => {
+      req.on("data", (chunk) => (rawBody += chunk));
+      req.on("end", resolve);
+    });
+
+    let parsedBody;
+    if (rawBody) {
+      try { parsedBody = JSON.parse(rawBody); } catch { /* ignore */ }
+    }
+
+    const sessionId = req.headers["mcp-session-id"];
+
+    // Route to existing session
+    if (sessionId && sessions.has(sessionId)) {
+      await sessions.get(sessionId).handleRequest(req, res, parsedBody);
+      return;
+    }
+
+    // New session: only allow if this is an initialize request
+    const isInit =
+      parsedBody?.method === "initialize" ||
+      (Array.isArray(parsedBody) && parsedBody.some((r) => r.method === "initialize"));
+
+    if (!sessionId && !isInit) {
+      res.writeHead(400, { "Content-Type": "text/plain" });
+      res.end("Bad Request: missing Mcp-Session-Id");
+      return;
+    }
+
+    // Create a fresh transport + server clone for this session
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => randomUUID(),
+    });
+
+    // Clean up session when transport closes
+    transport.onclose = () => {
+      if (transport.sessionId) sessions.delete(transport.sessionId);
+    };
+
+    // Wire a fresh server instance to this transport
+    const sessionServer = new McpServer({ name: "pikud-haoref", version: "0.1.0" });
+
+    // Re-register all tools on the session server
+    registerTools(sessionServer);
+
+    await sessionServer.connect(transport);
+
+    // Store session after connect (sessionId is set during initialize handling)
+    await transport.handleRequest(req, res, parsedBody);
+
+    if (transport.sessionId) {
+      sessions.set(transport.sessionId, transport);
+    }
   } else {
     res.writeHead(404).end("Not found");
   }
@@ -323,6 +372,40 @@ setInterval(pollAndBroadcast, 3000);
 
 const SSE_PORT = 8000;
 const sseServer = http.createServer((req, res) => {
+  // POST /api/inject — broadcast a fake alert as an SSE event.
+  // The posted JSON flows through the daemon's full pipeline (parse → dedupe → Slack → log)
+  // instead of being written directly to SQLite.
+  if (req.method === "POST" && req.url === "/api/inject") {
+    let body = "";
+    req.on("data", (chunk) => (body += chunk));
+    req.on("end", () => {
+      let alert;
+      try {
+        alert = JSON.parse(body);
+      } catch {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Invalid JSON" }));
+        return;
+      }
+      // Ensure required fields
+      if (!alert.id) alert.id = String(Date.now());
+      if (!alert.type) alert.type = "general";
+      if (!Array.isArray(alert.cities)) alert.cities = [];
+      const payload = JSON.stringify(alert);
+      for (const client of sseClients) {
+        try {
+          client.write(`event: new_alert\ndata: ${payload}\n\n`);
+        } catch { /* disconnected */ }
+      }
+      process.stderr.write(
+        `SSE: injected alert id=${alert.id} type=${alert.type} to ${sseClients.size} client(s)\n`
+      );
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, clients: sseClients.size }));
+    });
+    return;
+  }
+
   if (
     req.url === "/api/webhook/alerts" ||
     req.url === "/api/alerts-stream"

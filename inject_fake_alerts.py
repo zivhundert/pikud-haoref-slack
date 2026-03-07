@@ -1,76 +1,67 @@
-"""Inject fake alerts for demo purposes."""
+"""
+Inject fake alerts for demo / smoke-testing purposes.
+
+Alerts are posted to the Node SSE bridge (POST /api/inject) so they flow
+through the daemon's full pipeline:  parse → dedupe → Slack → DB log.
+Nothing is written directly to SQLite.
+"""
 import json
-import sqlite3
 import time
 import urllib.request
 
-DB = "data/alerts.db"
+SSE_INJECT = "http://localhost:8000/api/inject"
+DASHBOARD_ALERTS = "http://localhost:8080/api/alerts"
 
-conn = sqlite3.connect(DB)
-conn.execute("""
-CREATE TABLE IF NOT EXISTS alert_log (
-    rowid INTEGER PRIMARY KEY AUTOINCREMENT,
-    alert_id TEXT, title TEXT, cities TEXT, region TEXT,
-    description TEXT, event_time TEXT, received_at REAL,
-    endpoint TEXT, slack_result TEXT, raw TEXT
-)""")
-
-fake = [
+# Real pikud-haoref-api shaped payloads
+fake_alerts = [
     {
-        "alert_id": "sim-001",
-        "title": "ירי רקטות",
-        "cities": json.dumps(["תל אביב", "רמת גן"], ensure_ascii=False),
-        "region": "מרכז",
-        "description": "כוחות בכוננות",
-        "event_time": "1741267200",
-        "received_at": time.time() - 30,
-        "endpoint": "http://localhost:8000/api/webhook/alerts",
-        "slack_result": "ok",
-        "raw": "{}",
+        "id": f"inject-{int(time.time())}-001",
+        "type": "missiles",
+        "cities": ["תל אביב - מזרח", "רמת גן"],
+        "instructions": "היכנסו למרחב מוגן מיד",
     },
     {
-        "alert_id": "sim-002",
-        "title": "חדירת כטב״ם",
-        "cities": json.dumps(["חיפה", "קריית אתא"], ensure_ascii=False),
-        "region": "צפון",
-        "description": "",
-        "event_time": "1741267260",
-        "received_at": time.time() - 10,
-        "endpoint": "http://localhost:8000/api/alerts-stream",
-        "slack_result": "ok",
-        "raw": "{}",
+        "id": f"inject-{int(time.time())}-002",
+        "type": "hostileAircraftIntrusion",
+        "cities": ["חיפה", "קריית אתא"],
+        "instructions": "היכנסו למבנה מוגן",
     },
     {
-        "alert_id": "sim-003",
-        "title": "ירי רקטות",
-        "cities": json.dumps(["באר שבע"], ensure_ascii=False),
-        "region": "דרום",
-        "description": "",
-        "event_time": "1741267290",
-        "received_at": time.time() - 3,
-        "endpoint": "http://localhost:8000/api/webhook/alerts",
-        "slack_result": "error",
-        "raw": "{}",
+        "id": f"inject-{int(time.time())}-003",
+        "type": "terroristInfiltration",
+        "cities": ["נתיבות"],
+        "instructions": "נעלו דלתות וחלונות",
     },
 ]
 
-for a in fake:
-    conn.execute(
-        """
-        INSERT OR IGNORE INTO alert_log
-          (alert_id,title,cities,region,description,event_time,received_at,endpoint,slack_result,raw)
-        VALUES (:alert_id,:title,:cities,:region,:description,:event_time,:received_at,:endpoint,:slack_result,:raw)
-        """,
-        a,
+injected = 0
+for alert in fake_alerts:
+    body = json.dumps(alert, ensure_ascii=False).encode("utf-8")
+    req = urllib.request.Request(
+        SSE_INJECT,
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
     )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            result = json.loads(resp.read())
+            print(f"  injected {alert['type']} → {result}")
+            injected += 1
+    except Exception as exc:
+        print(f"  failed to inject {alert['type']}: {exc}")
+    time.sleep(0.3)   # small gap so dedupe IDs stay distinct
 
-conn.commit()
-conn.close()
-print(f"Injected {len(fake)} fake alerts")
+print(f"\nInjected {injected}/{len(fake_alerts)} alerts via SSE bridge")
 
-resp = urllib.request.urlopen("http://localhost:8080/api/alerts")
-data = json.loads(resp.read())
-print(f"Dashboard API returns {len(data)} alerts:")
-for entry in data:
-    cities = ", ".join(entry.get("cities") or [])
-    print(f"  [{entry['slack_result']:8s}] {entry['title']}  →  {cities}")
+# Give the daemon a moment to process, then show the dashboard
+time.sleep(1.5)
+try:
+    resp = urllib.request.urlopen(DASHBOARD_ALERTS, timeout=5)
+    data = json.loads(resp.read())
+    print(f"Dashboard now has {len(data)} alerts:")
+    for entry in data[:10]:
+        cities = ", ".join(entry.get("cities") or [])
+        print(f"  [{entry['slack_result']:9s}] {entry['title'] or '(no title)'}  →  {cities}")
+except Exception as exc:
+    print(f"Could not reach dashboard: {exc}")
