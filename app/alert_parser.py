@@ -41,6 +41,29 @@ class Alert:
 # Keys that are stable enough to form a hash identity
 _HASH_KEYS = ("title", "cities", "areas", "region", "category", "threat")
 
+# Maps the string `type` field from pikud-haoref-api → numeric category string
+# used by _CATEGORY in slack_notifier.py
+_TYPE_TO_CATEGORY: dict[str, str] = {
+    "missiles":                      "1",
+    "general":                       "2",
+    "hostileAircraftIntrusion":       "5",
+    "hazardousMaterials":             "7",
+    "earthQuake":                    "20",
+    "tsunami":                       "14",
+    "terroristInfiltration":         "15",
+    "newsFlash":                     "2",
+    # drill variants map to the same categories
+    "missilesDrill":                 "1",
+    "generalDrill":                  "2",
+    "hostileAircraftIntrusionDrill": "5",
+    "hazardousMaterialsDrill":       "7",
+    "earthQuakeDrill":               "20",
+    "tsunamiDrill":                  "14",
+    "terroristInfiltrationDrill":    "15",
+    "radiologicalEvent":             "7",
+    "radiologicalEventDrill":        "7",
+}
+
 
 def _stable_hash(data: dict[str, Any]) -> str:
     """Compute a deterministic SHA-256 hex digest over important fields."""
@@ -96,14 +119,25 @@ def parse_alert(raw_data: str) -> Alert | None:
     if isinstance(areas_raw, str):
         areas_raw = [areas_raw]
 
+    # Resolve category: prefer numeric `category`/`cat`, fall back to `type` string
+    category_raw = str(_get("category", "קטגוריה", "cat", default=""))
+    if not category_raw or category_raw in ("קטגוריה", "cat"):
+        type_str = str(data.get("type", ""))
+        category_raw = _TYPE_TO_CATEGORY.get(type_str, "")
+
+    # Resolve title: prefer explicit `title`, fall back to `instructions` (used by pikud-haoref-api)
+    title_raw = str(_get("title", "כותרת", default=""))
+    if not title_raw or title_raw == "כותרת":
+        title_raw = str(_get("instructions", "הנחיות", default=""))
+
     return Alert(
         alert_id=alert_id,
-        title=str(_get("title", "כותרת")),
+        title=title_raw,
         cities=list(cities_raw),
         areas=list(areas_raw),
         region=str(_get("region", "מחוז", "district")),
         description=str(_get("description", "תיאור")),
-        category=str(_get("category", "קטגוריה", "cat")),
+        category=category_raw,
         threat=str(_get("threat", "איום")),
         event_time=str(_get("event_time", "time", "timestamp")) or str(datetime.now().timestamp()),
         instructions=str(_get("instructions", "הנחיות")),

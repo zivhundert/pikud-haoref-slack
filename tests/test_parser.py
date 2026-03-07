@@ -134,3 +134,72 @@ def test_stable_hash_different_input() -> None:
     d1 = {"title": "a"}
     d2 = {"title": "b"}
     assert _stable_hash(d1) != _stable_hash(d2)
+
+
+# ---------------------------------------------------------------------------
+# pikud-haoref-api shaped payloads (type-string, no numeric category)
+# ---------------------------------------------------------------------------
+
+
+def test_type_missiles_maps_to_category_1() -> None:
+    """Payloads from pikud-haoref-api use `type` not `category`."""
+    payload = {
+        "id": "134168709720000000",
+        "type": "missiles",
+        "cities": ["תל אביב"],
+        "instructions": "היכנסו למרחב מוגן",
+    }
+    alert = parse_alert(json.dumps(payload))
+    assert alert is not None
+    assert alert.category == "1"
+
+
+def test_type_hostile_aircraft_maps_to_category_5() -> None:
+    payload = {
+        "id": "999",
+        "type": "hostileAircraftIntrusion",
+        "cities": ["חיפה"],
+        "instructions": "היכנסו למרחב מוגן",
+    }
+    alert = parse_alert(json.dumps(payload))
+    assert alert is not None
+    assert alert.category == "5"
+
+
+def test_instructions_used_as_title_fallback() -> None:
+    """When there is no `title`, the `instructions` field fills it."""
+    payload = {
+        "id": "777",
+        "type": "missiles",
+        "cities": ["אשדוד"],
+        "instructions": "היכנסו למרחב מוגן מיד",
+    }
+    alert = parse_alert(json.dumps(payload))
+    assert alert is not None
+    assert alert.title == "היכנסו למרחב מוגן מיד"
+
+
+def test_explicit_title_takes_precedence_over_instructions() -> None:
+    payload = {
+        "id": "888",
+        "type": "missiles",
+        "title": "ירי רקטות",
+        "cities": ["באר שבע"],
+        "instructions": "הנחיות אחרות",
+    }
+    alert = parse_alert(json.dumps(payload))
+    assert alert is not None
+    assert alert.title == "ירי רקטות"
+
+
+def test_missile_drill_type_flagged_as_drill() -> None:
+    payload = {
+        "id": "drill-1",
+        "type": "missilesDrill",
+        "cities": ["נתניה"],
+        "instructions": "תרגיל",
+    }
+    alert = parse_alert(json.dumps(payload))
+    assert alert is not None
+    assert alert.is_drill is True
+    assert alert.category == "1"
