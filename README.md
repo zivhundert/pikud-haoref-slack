@@ -117,6 +117,7 @@ Open **http://localhost:8080** for the dashboard.
 | `STATUS_FILE_PATH` | `data/status.json` | Status file path |
 | `LOG_LEVEL` | `INFO` | Python log level |
 | `TIMEZONE` | `Asia/Jerusalem` | Timezone for Slack timestamps |
+| `WEB_HOST` | `0.0.0.0` | Host to bind the web dashboard to |
 
 ---
 
@@ -160,7 +161,7 @@ automatically. Available tools:
 | `get_active_alert` | Query the live Pikud Ha'oref API directly |
 | `get_recent_alerts` | Read recent alerts from the local SQLite DB |
 | `get_daemon_status` | Read `data/status.json` |
-| `get_sample_alert` | Return a realistic example alert payload |
+| `get_sample_alert` | Return an example alert payload (illustrative — not all fields come from the live API) |
 
 ---
 
@@ -243,11 +244,10 @@ This sends a clearly-marked `[TEST]` message — not a real alert.
 3. Inject a fake alert via curl:
 
 ```bash
-# Simulate an SSE event against your local upstream
-curl -X POST http://localhost:8000/api/inject-alert \
+# Simulate an SSE event through the Node bridge's inject endpoint
+curl -X POST http://localhost:8000/api/inject \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: your-api-key" \
-  -d '{"id":"test-1","title":"ירי רקטות","cities":["חיפה"],"region":"צפון"}'
+  -d '{"id":"test-1","type":"missiles","cities":["חיפה"],"instructions":"היכנסו למרחב מוגן"}'
 ```
 
 4. Watch daemon logs and check Slack.
@@ -257,17 +257,14 @@ curl -X POST http://localhost:8000/api/inject-alert \
 ## Inspecting the live SSE stream with curl
 
 ```bash
-curl -N \
-  -H "Accept: text/event-stream" \
-  -H "X-API-Key: your-api-key" \
-  http://localhost:8000/api/webhook/alerts
+curl -N http://localhost:8000/api/webhook/alerts
 ```
 
-You will see keep-alive lines (`: keep-alive`) and event blocks like:
+You will see keep-alive lines (`: keepalive`) and event blocks like:
 
 ```
 event: new_alert
-data: {"id":"abc","title":"ירי רקטות","cities":["תל אביב"]}
+data: {"type":"missiles","cities":["תל אביב - מזרח"],"instructions":"היכנסו למרחב מוגן","id":"134168709720000000"}
 
 ```
 
