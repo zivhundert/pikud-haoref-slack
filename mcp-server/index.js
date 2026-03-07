@@ -267,20 +267,37 @@ mcpHttpServer.listen(MCP_PORT, () => {
 /** All currently connected SSE response streams (Python daemon connections). */
 const sseClients = new Set();
 
-/** Last alert ID we already broadcast — used for deduplication. */
-let lastBroadcastId = null;
+/** Recently broadcast alert IDs → timestamp (ms). Prevents re-broadcasting within TTL. */
+const recentBroadcastIds = new Map();
+const RECENT_ID_TTL_MS = 90_000; // 90 s
+
+function alreadyBroadcast(id) {
+  const strId = String(id);
+  const ts = recentBroadcastIds.get(strId);
+  if (!ts) return false;
+  if (Date.now() - ts > RECENT_ID_TTL_MS) {
+    recentBroadcastIds.delete(strId);
+    return false;
+  }
+  return true;
+}
+
+/** Guard against overlapping poll calls (e.g. slow network round-trip). */
+let _polling = false;
 
 /** Poll the real Pikud Ha'oref API and broadcast any new alert to all clients. */
 async function pollAndBroadcast() {
+  if (_polling) return;
+  _polling = true;
   try {
     const alert = await getActiveAlertAsync();
     if (
       alert &&
       alert.type !== "none" &&
       alert.id != null &&
-      String(alert.id) !== String(lastBroadcastId)
+      !alreadyBroadcast(alert.id)
     ) {
-      lastBroadcastId = String(alert.id);
+      recentBroadcastIds.set(String(alert.id), Date.now());
       const payload = JSON.stringify(alert);
       process.stderr.write(
         `SSE: broadcasting new_alert id=${alert.id} type=${alert.type}\n`
@@ -295,6 +312,8 @@ async function pollAndBroadcast() {
     }
   } catch (err) {
     process.stderr.write(`SSE poll error: ${err.message}\n`);
+  } finally {
+    _polling = false;
   }
 }
 

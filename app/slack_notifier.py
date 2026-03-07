@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -147,23 +148,37 @@ class SlackNotifier:
         """Send an alert to Slack. Returns True on success."""
         blocks = build_blocks(alert, endpoint, self._tz_name)
         fallback = build_fallback_text(alert, self._tz_name)
-        try:
-            response: WebhookResponse = self._client.send(
-                text=fallback,
-                blocks=blocks,
-            )
-            if response.status_code == 200:
-                log.info("slack_sent alert_id=%s status=200", alert.alert_id)
-                return True
-            log.error(
-                "slack_failed status=%s body=%s",
-                response.status_code,
-                response.body,
-            )
-            return False
-        except Exception as exc:
-            log.exception("slack_exception alert_id=%s error=%s", alert.alert_id, exc)
-            return False
+        for attempt in range(3):
+            try:
+                response: WebhookResponse = self._client.send(
+                    text=fallback,
+                    blocks=blocks,
+                )
+                if response.status_code == 200:
+                    log.info("slack_sent alert_id=%s status=200", alert.alert_id)
+                    return True
+                if response.status_code == 429:
+                    retry_after = int((response.headers or {}).get("Retry-After", 2))
+                    log.warning(
+                        "slack_rate_limited alert_id=%s attempt=%d retry_in=%ds",
+                        alert.alert_id, attempt + 1, retry_after,
+                    )
+                    time.sleep(retry_after)
+                    continue
+                log.error(
+                    "slack_failed status=%s body=%s",
+                    response.status_code,
+                    response.body,
+                )
+                return False
+            except Exception as exc:
+                log.exception("slack_exception alert_id=%s error=%s", alert.alert_id, exc)
+                return False
+        log.error(
+            "slack_failed alert_id=%s — gave up after 3 attempts (rate limited)",
+            alert.alert_id,
+        )
+        return False
 
     def send_test(self) -> bool:
         """Send a clearly-marked test message to Slack."""

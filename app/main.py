@@ -138,7 +138,7 @@ class Daemon:
             alert.cities,
         )
 
-        slack_ok = self._slack.send_alert(alert, endpoint)
+        slack_ok = await asyncio.to_thread(self._slack.send_alert, alert, endpoint)
         summary = f"{alert.title} | {', '.join(alert.cities or alert.areas)}"
         self._status.mark_alert(summary, slack_ok)
 
