@@ -340,22 +340,27 @@ async function pollAndBroadcast() {
   _polling = true;
   try {
     const alert = await getActiveAlertAsync();
-    if (
-      alert &&
-      alert.type !== "none" &&
-      alert.id != null &&
-      !alreadyBroadcast(alert.id)
-    ) {
-      recentBroadcastIds.set(String(alert.id), Date.now());
-      const payload = JSON.stringify(alert);
-      process.stderr.write(
-        `SSE: broadcasting new_alert id=${alert.id} type=${alert.type}\n`
-      );
-      for (const res of sseClients) {
-        try {
-          res.write(`event: new_alert\ndata: ${payload}\n\n`);
-        } catch {
-          // Client disconnected mid-write; the close handler cleans up
+    if (alert && alert.type !== "none") {
+      // When the API doesn't supply an id (e.g. AlertsHistory.json, or id=null/0),
+      // build a stable composite key from type + sorted cities so these alerts
+      // (e.g. "בדקות הקרובות צפויות להתקבל התרעות באזורך", "האירוע הסתיים")
+      // are not silently dropped.
+      const broadcastId = alert.id != null
+        ? String(alert.id)
+        : `${alert.type}:${(alert.cities || []).slice().sort().join(",")}`;
+
+      if (!alreadyBroadcast(broadcastId)) {
+        recentBroadcastIds.set(broadcastId, Date.now());
+        const payload = JSON.stringify(alert);
+        process.stderr.write(
+          `SSE: broadcasting new_alert id=${broadcastId} type=${alert.type}\n`
+        );
+        for (const res of sseClients) {
+          try {
+            res.write(`event: new_alert\ndata: ${payload}\n\n`);
+          } catch {
+            // Client disconnected mid-write; the close handler cleans up
+          }
         }
       }
     }
