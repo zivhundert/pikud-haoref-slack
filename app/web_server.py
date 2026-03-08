@@ -385,8 +385,10 @@ function renderAlertCard(a, isNew) {
     ? a.cities.join(' · ')
     : (Array.isArray(raw.cities) ? raw.cities.join(' · ') : '');
 
-  // Instructions from raw (pikud-haoref-api field)
-  const instructions = raw.instructions || a.description || '';
+  // Instructions from raw (pikud-haoref-api field).
+  // Suppress if identical to the title — same logic as Slack's _clean_instructions().
+  const _instructions = raw.instructions || a.description || '';
+  const instructions = _instructions.trim() !== title.trim() ? _instructions : '';
 
   const alertId = raw.id || a.alert_id || '';
   const endpoint = a.endpoint || '';

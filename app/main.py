@@ -12,7 +12,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import sys
+from pathlib import Path
 
 from app.alert_log import AlertLog
 from app.alert_parser import Alert, parse_alert
@@ -44,6 +46,12 @@ def _passes_filter(alert: Alert, settings) -> bool:  # type: ignore[type-arg]
     if not city_filters and not region_filters:
         return True  # no filters → pass all
 
+    # These types are country-wide / have no specific city targets — always pass them
+    # through so city/region filters don't silently swallow them.
+    _PASSTHROUGH_TYPES = {"newsFlash", "earthQuake", "tsunami", "general"}
+    if alert.raw.get("type") in _PASSTHROUGH_TYPES:
+        return True
+
     all_locations = [c.strip() for c in alert.cities + alert.areas]
     if city_filters:
         if any(city in all_locations for city in city_filters):
@@ -65,8 +73,10 @@ class Daemon:
     def __init__(self) -> None:
         self._settings = get_settings()
         configure_logging(self._settings.log_level)
+        # Use a separate file for dedupe so it never contends with alert_log writes.
+        dedupe_path = self._settings.db_path.replace(".db", "_dedupe.db")
         self._dedupe = DedupeStore(
-            self._settings.db_path,
+            dedupe_path,
             self._settings.dedupe_ttl_seconds,
         )
         self._status = StatusStore(self._settings.status_file_path)
@@ -205,8 +215,30 @@ class Daemon:
 
 
 def cmd_run() -> None:
-    daemon = Daemon()
-    asyncio.run(daemon.run())
+    pid_file = Path("data/daemon.pid")
+    pid_file.parent.mkdir(parents=True, exist_ok=True)
+
+    # Detect a stale or live duplicate process
+    if pid_file.exists():
+        try:
+            old_pid = int(pid_file.read_text().strip())
+            os.kill(old_pid, 0)  # 0 = check existence only
+            print(
+                f"ERROR: daemon is already running (PID {old_pid}). "
+                f"Stop it first or remove {pid_file}.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        except (ProcessLookupError, ValueError):
+            # Process no longer exists — stale PID file, safe to overwrite
+            pass
+
+    pid_file.write_text(str(os.getpid()))
+    try:
+        daemon = Daemon()
+        asyncio.run(daemon.run())
+    finally:
+        pid_file.unlink(missing_ok=True)
 
 
 def cmd_status() -> None:

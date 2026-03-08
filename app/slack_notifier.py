@@ -57,7 +57,10 @@ def _category_info(alert: Alert) -> tuple[str, str]:
         entry = _CATEGORY.get(str(alert.category))
         if entry:
             return entry
-    # Fall back to title
+    # No mapped category — use the alert title directly as the Slack header.
+    # This preserves meaningful titles like "האירוע הסתיים" or
+    # "בדקות הקרובות צפויות להתקבל התרעות באזורך" instead of showing
+    # a misleading category label.
     return (alert.title or "התראה", _DEFAULT_EMOJI)
 
 

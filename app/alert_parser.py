@@ -45,16 +45,16 @@ _HASH_KEYS = ("title", "cities", "areas", "region", "category", "threat")
 # used by _CATEGORY in slack_notifier.py
 _TYPE_TO_CATEGORY: dict[str, str] = {
     "missiles":                      "1",
-    "general":                       "2",
+    # "general" intentionally omitted — its title IS the meaningful label
+    # (e.g. "האירוע הסתיים", "בדקות הקרובות צפויות להתקבל התרעות באזורך")
     "hostileAircraftIntrusion":       "5",
     "hazardousMaterials":             "7",
     "earthQuake":                    "20",
     "tsunami":                       "14",
     "terroristInfiltration":         "15",
-    "newsFlash":                     "2",
+    # "newsFlash" intentionally omitted — use its title as the Slack header
     # drill variants map to the same categories
     "missilesDrill":                 "1",
-    "generalDrill":                  "2",
     "hostileAircraftIntrusionDrill": "5",
     "hazardousMaterialsDrill":       "7",
     "earthQuakeDrill":               "20",
