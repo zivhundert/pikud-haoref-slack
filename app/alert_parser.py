@@ -38,8 +38,10 @@ class Alert:
     raw: dict[str, Any] = field(default_factory=dict)
 
 
-# Keys that are stable enough to form a hash identity
-_HASH_KEYS = ("title", "cities", "areas", "region", "category", "threat")
+# Keys that are stable enough to form a hash identity.
+# `instructions` is critical for general/newsFlash alerts where title==instructions
+# and cities/region are often empty — it's the only distinguishing field.
+_HASH_KEYS = ("title", "cities", "areas", "region", "category", "threat", "instructions")
 
 # Maps the string `type` field from pikud-haoref-api → numeric category string
 # used by _CATEGORY in slack_notifier.py
@@ -66,7 +68,12 @@ _TYPE_TO_CATEGORY: dict[str, str] = {
 
 
 def _stable_hash(data: dict[str, Any]) -> str:
-    """Compute a deterministic SHA-256 hex digest over important fields."""
+    """Compute a deterministic SHA-256 hex digest over stable semantic fields.
+
+    Deliberately excludes dynamic fields like `event_time` / `timestamp` so
+    that the same logical alert arriving again after a poll cycle (with a
+    different timestamp) is still recognised as a duplicate.
+    """
     parts: list[str] = []
     for key in _HASH_KEYS:
         val = data.get(key, "")
@@ -74,8 +81,6 @@ def _stable_hash(data: dict[str, Any]) -> str:
             parts.append(key + "=" + ",".join(sorted(str(v) for v in val)))
         else:
             parts.append(key + "=" + str(val))
-    # Also include a normalised form of the full raw payload as a tiebreaker
-    parts.append("raw=" + json.dumps(data, sort_keys=True, ensure_ascii=False))
     digest = hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
     return digest[:24]
 

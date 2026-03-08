@@ -345,9 +345,12 @@ async function pollAndBroadcast() {
       // build a stable composite key from type + sorted cities so these alerts
       // (e.g. "בדקות הקרובות צפויות להתקבל התרעות באזורך", "האירוע הסתיים")
       // are not silently dropped.
+      // For id-less alerts, include `instructions` in the key so that distinct
+      // general/newsFlash messages (e.g. "האירוע הסתיים" vs "בדקות הקרובות")
+      // don't collapse to the same dedup key and suppress each other.
       const broadcastId = alert.id != null
         ? String(alert.id)
-        : `${alert.type}:${(alert.cities || []).slice().sort().join(",")}`;
+        : `${alert.type}:${(alert.cities || []).slice().sort().join(",")}:${alert.instructions || ""}`;
 
       if (!alreadyBroadcast(broadcastId)) {
         recentBroadcastIds.set(broadcastId, Date.now());
