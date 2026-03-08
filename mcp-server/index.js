@@ -341,16 +341,16 @@ async function pollAndBroadcast() {
   try {
     const alert = await getActiveAlertAsync();
     if (alert && alert.type !== "none") {
-      // When the API doesn't supply an id (e.g. AlertsHistory.json, or id=null/0),
-      // build a stable composite key from type + sorted cities so these alerts
-      // (e.g. "בדקות הקרובות צפויות להתקבל התרעות באזורך", "האירוע הסתיים")
-      // are not silently dropped.
-      // For id-less alerts, include `instructions` in the key so that distinct
-      // general/newsFlash messages (e.g. "האירוע הסתיים" vs "בדקות הקרובות")
-      // don't collapse to the same dedup key and suppress each other.
-      const broadcastId = alert.id != null
-        ? String(alert.id)
-        : `${alert.type}:${(alert.cities || []).slice().sort().join(",")}:${alert.instructions || ""}`;
+      // Always use a stable composite key (type + sorted cities + instructions)
+      // regardless of whether the API supplied a numeric id.
+      // The same real-world alert can arrive via two paths in pikud-haoref-api:
+      //   • Alerts.json      → id is a large integer (e.g. 134174378750000000)
+      //   • AlertsHistory.json → id is null
+      // Using the numeric id for the first path and a computed key for the second
+      // meant the Node layer broadcast the same alert twice, and the Python
+      // layer didn't recognise the second copy as a duplicate because their
+      // stored keys were different. A single stable composite key fixes both.
+      const broadcastId = `${alert.type}:${(alert.cities || []).slice().sort().join(",")}:${alert.instructions || ""}`;
 
       if (!alreadyBroadcast(broadcastId)) {
         recentBroadcastIds.set(broadcastId, Date.now());

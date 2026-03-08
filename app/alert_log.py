@@ -84,6 +84,17 @@ class AlertLog:
             "SELECT * FROM alert_log ORDER BY received_at DESC LIMIT ?",
             (limit,),
         ).fetchall()
+        return self._deserialise(rows)
+
+    def recent_minutes(self, minutes: int = 5) -> list[dict[str, Any]]:
+        since = time.time() - minutes * 60
+        rows = self._conn.execute(
+            "SELECT * FROM alert_log WHERE received_at >= ? ORDER BY received_at DESC",
+            (since,),
+        ).fetchall()
+        return self._deserialise(rows)
+
+    def _deserialise(self, rows) -> list[dict[str, Any]]:
         result = []
         for r in rows:
             d = dict(r)

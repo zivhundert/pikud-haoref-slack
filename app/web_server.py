@@ -259,7 +259,7 @@ _HTML = """\
 
 <!-- Alerts feed -->
 <div class="section-title">
-  התראות אחרונות
+  התראות אחרונות (5 דקות)
   <span class="badge" id="alert-count">0</span>
 </div>
 <div id="alert-list"><div class="empty">לא התקבלו התראות עדיין</div></div>
@@ -443,8 +443,8 @@ function prependAlert(a) {
     if (first) first.classList.remove('new');
   }, 1500);
 
-  // Keep max 50 in DOM
-  while (list.children.length > 50) list.removeChild(list.lastChild);
+  // Keep at most 200 cards in DOM (safety cap)
+  while (list.children.length > 200) list.removeChild(list.lastChild);
 }
 
 function populateAlerts(alerts) {
@@ -604,7 +604,7 @@ async def handle_config(request: web.Request) -> web.Response:
 
 async def handle_alerts(request: web.Request) -> web.Response:
     alert_log = request.app["alert_log"]
-    return web.json_response(alert_log.recent(50))
+    return web.json_response(alert_log.recent_minutes(5))
 
 
 async def handle_logs(request: web.Request) -> web.Response:

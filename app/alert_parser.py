@@ -114,7 +114,12 @@ def parse_alert(raw_data: str) -> Alert | None:
                 return data[k]
         return default
 
-    alert_id: str = str(data["id"]) if "id" in data else _stable_hash(data)
+    # Always derive alert_id from stable semantic fields, never from the raw
+    # API id.  The same real-world alert can arrive via two different API paths
+    # (Alerts.json with a numeric id, AlertsHistory.json with id=null) and
+    # would get different alert_ids, causing the Python dedup layer to miss the
+    # second copy.  The raw id is still available in alert.raw for debugging.
+    alert_id: str = _stable_hash(data)
 
     cities_raw = _get("cities", "אזורים", default=[])
     if isinstance(cities_raw, str):
