@@ -19,7 +19,8 @@ def test_parse_full_alert() -> None:
     }
     alert = parse_alert(json.dumps(payload))
     assert alert is not None
-    assert alert.alert_id == "abc123"
+    assert len(alert.alert_id) == 24  # always a semantic hash
+    assert alert.raw["id"] == "abc123"  # raw id still accessible
     assert alert.title == "ירי רקטות"
     assert "תל אביב" in alert.cities
     assert alert.region == "מרכז"
@@ -116,7 +117,7 @@ def test_parse_from_sse_frame() -> None:
     data_field = _simulate_sse_frame("new_alert", raw_event_data)
     alert = parse_alert(data_field)
     assert alert is not None
-    assert alert.alert_id == "sse-001"
+    assert len(alert.alert_id) == 24  # always a semantic hash
     assert "קריית שמונה" in alert.cities
 
 

@@ -146,7 +146,7 @@ def test_sse_new_alert_event() -> None:
     assert real[0].event == "new_alert"
     alert = parse_alert(real[0].data)
     assert alert is not None
-    assert alert.alert_id == "sse-1"
+    assert len(alert.alert_id) == 24  # always a semantic hash
     assert "חיפה" in alert.cities
 
 
@@ -175,7 +175,9 @@ def test_sse_mixed_stream() -> None:
     real = [e for e in events if e is not None]
     assert len(real) == 2
     ids = [parse_alert(e.data).alert_id for e in real]  # type: ignore[union-attr]
-    assert ids == ["a1", "a2"]
+    assert len(ids) == 2
+    assert ids[0] != ids[1]  # different payloads produce different hashes
+    assert all(len(i) == 24 for i in ids)
 
 
 def test_sse_blank_line_without_data_no_event() -> None:

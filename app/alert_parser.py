@@ -114,7 +114,7 @@ def parse_alert(raw_data: str) -> Alert | None:
                 return data[k]
         return default
 
-    # Always derive alert_id from stable semantic fields, never from the raw
+q    # Always derive alert_id from stable semantic fields, never from the raw
     # API id.  The same real-world alert can arrive via two different API paths
     # (Alerts.json with a numeric id, AlertsHistory.json with id=null) and
     # would get different alert_ids, causing the Python dedup layer to miss the
